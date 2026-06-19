@@ -172,7 +172,7 @@ LENS(random_state=42).fit(
 
 You must supply the **inputs** (`texts` [+ `references`], or `features`) and
 exactly one **target channel** (`scores`, `pairs`, or `ranks`+`groups`).
-Supplying more than one target channel raises `AmbiguousTaskError`.
+
 
 | Argument | Meaning |
 |---|---|
