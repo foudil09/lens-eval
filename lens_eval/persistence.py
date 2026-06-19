@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import pickle
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 import math
@@ -24,6 +25,57 @@ import numpy as np
 
 if TYPE_CHECKING:
     from .lens import LENS
+
+# Hugging Face ``owner/repo`` id: exactly one slash, each segment limited to the
+# chars the Hub allows. Matched only after ruling out an existing local path, so
+# a real folder named ``a/b`` always wins over a same-named repo id.
+_HF_REPO_ID = re.compile(r"^[A-Za-z0-9][\w.-]*/[A-Za-z0-9][\w.-]*$")
+
+
+def _resolve_model_dir(path: str | Path, **hub_kwargs) -> Path:
+    """Resolve ``path`` to a local model directory.
+
+    An existing local path is used as-is. Otherwise, if ``path`` looks like a
+    Hugging Face ``owner/repo`` id the repo is fetched with ``snapshot_download``
+    and the cached directory is returned. Anything else is a missing local path.
+
+    ``hub_kwargs`` (e.g. ``revision``, ``token``, ``cache_dir``) are forwarded to
+    ``snapshot_download``.
+    """
+    p = Path(path)
+    if p.exists():
+        if not p.is_dir():
+            raise NotADirectoryError(f"{p} exists but is not a directory")
+        return p
+
+    if isinstance(path, str) and _HF_REPO_ID.match(path):
+        from huggingface_hub import snapshot_download
+        return Path(snapshot_download(repo_id=path, repo_type="model", **hub_kwargs))
+
+    raise FileNotFoundError(
+        f"No local directory {str(path)!r}, and it is not a valid Hugging Face "
+        "repo id (expected 'owner/repo')."
+    )
+
+
+def push_lens_to_hub(lens: "LENS", repo_id: str, *, private: bool = False,
+                     commit_message: str | None = None, **upload_kwargs) -> str:
+    """Save ``lens`` to a temp dir and upload it to ``repo_id`` on the Hub.
+
+    Returns the commit URL. ``upload_kwargs`` (e.g. ``token``, ``revision``) are
+    forwarded to ``upload_folder``.
+    """
+    import tempfile
+    from huggingface_hub import create_repo, upload_folder
+
+    create_repo(repo_id, repo_type="model", private=private, exist_ok=True)
+    with tempfile.TemporaryDirectory() as d:
+        save_lens(lens, d)
+        return upload_folder(
+            repo_id=repo_id, repo_type="model", folder_path=d,
+            commit_message=commit_message or "Upload LENS combiner",
+            **upload_kwargs,
+        )
 
 
 def save_lens(lens: "LENS", path: str | Path) -> None:
@@ -70,7 +122,10 @@ def load_lens(path: str | Path) -> "LENS":
 
     p = Path(path)
     manifest = json.loads((p / "manifest.json").read_text())
-    report   = json.loads((p / "selection_report.json").read_text())
+    # selection_report.json only feeds reporting attrs (.report()/cv_scores_/
+    # diagnostics_); score() needs only the combiner + manifest, so it's optional.
+    report_path = p / "selection_report.json"
+    report = json.loads(report_path.read_text()) if report_path.exists() else {}
 
     with open(p / "combiner.pkl", "rb") as f:
         combiner = pickle.load(f)

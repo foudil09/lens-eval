@@ -22,6 +22,7 @@ dependencies = [
     "numpy>=1.23",
     "scipy>=1.10",
     "scikit-learn>=1.2",
+    "huggingface_hub>=0.20",
 ]
 
 [project.optional-dependencies]

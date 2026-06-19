@@ -633,6 +633,24 @@ class LENS:
         save_lens(self, path)
 
     @classmethod
-    def load(cls, path: str | Path) -> "LENS":
-        from .persistence import load_lens
-        return load_lens(path)
+    def load(cls, path: str | Path, **hub_kwargs) -> "LENS":
+        """Load from a local directory or a Hugging Face ``owner/repo`` id.
+
+        An existing local path is read directly; otherwise a repo id is fetched
+        from the Hub. ``hub_kwargs`` (e.g. ``revision``, ``token``, ``cache_dir``)
+        are forwarded to ``snapshot_download``.
+        """
+        from .persistence import _resolve_model_dir, load_lens
+        return load_lens(_resolve_model_dir(path, **hub_kwargs))
+
+    def push_to_hub(self, repo_id: str, *, private: bool = False,
+                    commit_message: str | None = None, **upload_kwargs) -> str:
+        """Upload this fitted combiner to ``repo_id`` on the Hugging Face Hub.
+
+        Returns the commit URL. ``upload_kwargs`` (e.g. ``token``, ``revision``)
+        are forwarded to ``upload_folder``.
+        """
+        self._require_fit()
+        from .persistence import push_lens_to_hub
+        return push_lens_to_hub(self, repo_id, private=private,
+                                commit_message=commit_message, **upload_kwargs)
