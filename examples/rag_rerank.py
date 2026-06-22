@@ -1,22 +1,4 @@
-"""Re-rank RAG answers with a pretrained lens-eval metric — no training, just text.
 
-`foudil/lens_focus` is a LENS combiner trained on RewardBench-2's *Focus* task:
-given a prompt and several candidate answers, pick the best one. It scores each
-answer by how well it fits the prompt on the four LENS dimensions (semantic,
-nli, naturalness, emotion), exactly the call a RAG pipeline makes once it has
-retrieved a passage, generated a few candidate answers, and needs to choose.
-On the RewardBench-2 Focus leaderboard it outranks many LLM-as-a-judge models,
-at a fraction of the cost and fully interpretable.
-
-The prompt and answers below are hand-written for illustration (not from the
-Focus dataset) so the contrast is easy to read; on the real benchmark the
-distractors are subtler and lens_focus still recovers the human-preferred
-answer. We hand it one prompt with a retrieved guideline and four candidate
-answers; it ranks them, higher = more likely to be the best answer.
-
-Needs the encoders extra:  pip install 'lens-eval[encoders]'
-Run it:                     python examples/rag_rerank.py
-"""
 
 from textwrap import shorten
 
