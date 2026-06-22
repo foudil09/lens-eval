@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lens-eval"
-version = "0.1.0"
+version = "0.2.0"
 description = "Interpretable multi-dimension text quality metric with combiner"
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 authors = [{ name = "Foudil Chebbour", email = "foudil.chebbour@gmail.com" }]
-keywords = ["nlp", "evaluation", "lens", "interpretable"]
+keywords = ["RAG", "reward model", "llm-as-a-judge", "text-quality", "text evaluation"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
