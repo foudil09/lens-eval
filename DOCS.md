@@ -113,7 +113,7 @@ populate `selection_report_`, `diagnostics_`, and `combiner_`.
 | Dimension | What it measures | Default encoder | Needs a reference? |
 |---|---|---|---|
 | `semantic` | meaning overlap with the reference | `sentence-transformers/all-mpnet-base-v2` | yes |
-| `nli` | entailment-flavoured similarity | `cross-encoder/nli-deberta-v3-base` | yes |
+| `nli` | P(entailment), candidate ⇒ reference (joint cross-encoder, directional) | `cross-encoder/nli-deberta-v3-base` | yes |
 | `naturalness` | fluency / human-likeness | `foudil/lens-naturalness-encoder` | **optional** (centroid mode) |
 | `emotion` | affective alignment | `foudil/lens-emotion-encoder` | yes |
 

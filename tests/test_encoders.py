@@ -120,10 +120,36 @@ def test_reference_dim_with_no_refs_returns_nan_column(monkeypatch):
 def test_featurize_returns_one_column_per_dimension(monkeypatch):
     monkeypatch.setattr(enc, "_encode",
                         lambda dim, texts: np.ones((len(texts), 4), dtype=np.float32))
+
+    class _FakeCE:
+        def entail(self, premises, hypotheses):
+            return np.full(len(premises), 0.5, dtype=np.float32)
+
+    monkeypatch.setattr(enc, "_get_cross_encoder", lambda: _FakeCE())
     enc.configure(naturalness_mode="centroid",
                   naturalness_centroid=np.array([1, 0, 0, 0], dtype=np.float32))
     X = enc.featurize(["a", "b"], references=["r1", "r2"])
     assert X.shape == (2, 4)
+
+
+def test_nli_score_passes_candidate_as_premise_reference_as_hypothesis(monkeypatch):
+    seen = {}
+
+    class _FakeCE:
+        def entail(self, premises, hypotheses):
+            seen["premises"], seen["hypotheses"] = list(premises), list(hypotheses)
+            return np.arange(len(premises), dtype=np.float32)
+
+    monkeypatch.setattr(enc, "_get_cross_encoder", lambda: _FakeCE())
+    out = enc.nli_score(["cand1", "cand2"], ["ref1", "ref2"])
+    assert seen["premises"] == ["cand1", "cand2"]      # candidate is the premise
+    assert seen["hypotheses"] == ["ref1", "ref2"]      # reference is the hypothesis
+    assert out.tolist() == [0.0, 1.0]
+
+
+def test_nli_score_without_refs_returns_nan_column():
+    out = enc.nli_score(["a", "b"], None)  # type: ignore[arg-type]
+    assert out.shape == (2,) and np.isnan(out).all()
 
 
 # ---------------------------------------------------------------------------

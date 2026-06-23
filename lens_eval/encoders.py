@@ -11,8 +11,10 @@ Public API — call the per-axis functions directly or via ``featurize``:
 State lives in module-level config + a lazy encoder cache. ``configure()`` is
 idempotent and clears the cache when paths/device/batch_size change.
 
-Each encoder produces an L2-normalised embedding; per-pair scores are cosine
-similarities in [-1, 1] (higher = better).
+The semantic, naturalness, and emotion axes produce L2-normalised embeddings
+and score by cosine in [-1, 1]. The nli axis is different: it runs the NLI
+cross-encoder on the (candidate, reference) pair and returns P(entailment) in
+[0, 1] — directional, since entailment is not symmetric.
 """
 
 from __future__ import annotations
@@ -133,8 +135,16 @@ def semantic_score(texts: Sequence[str], references: Sequence[str]) -> np.ndarra
 
 
 def nli_score(texts: Sequence[str], references: Sequence[str]) -> np.ndarray:
-    """cos(emb(text), emb(reference)) via the NLI encoder backbone."""
-    return _cosine_score("nli", texts, references)
+    """P(entailment) for premise=text, hypothesis=reference via the NLI
+    cross-encoder. Asymmetric by design: it scores whether the candidate
+    entails the reference, which a symmetric cosine cannot capture."""
+    if references is None:
+        return np.full(len(texts), np.nan, dtype=np.float32)
+    if len(texts) != len(references):
+        raise ValueError(
+            f"texts ({len(texts)}) and references ({len(references)}) must have the same length"
+        )
+    return _get_cross_encoder().entail(texts, references)
 
 
 def naturalness_score(
@@ -190,6 +200,8 @@ def featurize(
 def _dim_score(dim: str, texts, refs):
     if dim == "naturalness":
         return naturalness_score(texts, refs)
+    if dim == "nli":
+        return nli_score(texts, refs)
     if refs is None:
         # Reference-dependent dim with no refs → NaN column; fit() drops it.
         return np.full(len(texts), np.nan, dtype=np.float32)
@@ -228,6 +240,15 @@ def _get_encoder(dim: str):
     cls = _STEncoder if dim in {"semantic", "naturalness"} else _HFBackboneEncoder
     _CACHE[dim] = cls(path, device=device, batch_size=batch_size)
     return _CACHE[dim]
+
+
+def _get_cross_encoder():
+    if "nli_ce" in _CACHE:
+        return _CACHE["nli_ce"]
+    _CACHE["nli_ce"] = _CrossEncoderScorer(
+        _CONFIG["paths"]["nli"], _resolved_device(), _CONFIG["batch_size"]
+    )
+    return _CACHE["nli_ce"]
 
 
 def _resolved_device() -> str:
@@ -363,6 +384,48 @@ class _HFBackboneEncoder:
         # Empty input → preserve (0, hidden_size) so downstream vstack/dot works.
         dim = int(self.model.config.hidden_size)
         return np.zeros((0, dim), dtype=np.float32)
+
+
+class _CrossEncoderScorer:
+    """NLI cross-encoder: P(entailment) for (premise, hypothesis) pairs.
+
+    The pair is encoded jointly through the classification head, so the score
+    is directional. Identical pairs are scored once and reused.
+    """
+
+    def __init__(self, path: str, device: str, batch_size: int, max_length: int = 256):
+        from transformers import AutoModelForSequenceClassification, AutoTokenizer
+        import torch
+        self.device = device
+        self.batch_size = batch_size
+        self.max_length = max_length
+        self.tokenizer = AutoTokenizer.from_pretrained(path)
+        self.model = AutoModelForSequenceClassification.from_pretrained(path).to(device)
+        self.model.eval()
+        self._torch = torch
+        labels = {int(k): str(v).lower() for k, v in self.model.config.id2label.items()}
+        self.ent_idx = next((i for i, lab in labels.items() if "entail" in lab), None)
+        if self.ent_idx is None:
+            raise ValueError(f"no 'entailment' class in {path} id2label={labels}")
+
+    def entail(self, premises: Sequence[str], hypotheses: Sequence[str]) -> np.ndarray:
+        torch = self._torch
+        pairs = list(zip(map(str, premises), map(str, hypotheses)))
+        uniq = list(dict.fromkeys(pairs))
+        probs = np.empty(len(uniq), dtype=np.float32)
+        with torch.no_grad():
+            for i in range(0, len(uniq), self.batch_size):
+                chunk = uniq[i: i + self.batch_size]
+                enc = self.tokenizer(
+                    [p for p, _ in chunk], [h for _, h in chunk],
+                    padding=True, truncation=True,
+                    max_length=self.max_length, return_tensors="pt",
+                ).to(self.device)
+                logits = self.model(**enc).logits
+                p = torch.softmax(logits, dim=1)[:, self.ent_idx]
+                probs[i: i + len(chunk)] = p.float().cpu().numpy()
+        lookup = dict(zip(uniq, probs))
+        return np.array([lookup[pr] for pr in pairs], dtype=np.float32)
 
 
 def _file_hash(path) -> Optional[str]:
