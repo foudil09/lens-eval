@@ -31,15 +31,21 @@ Question:   How much paracetamol can I take for a 39°C fever?
 Retrieved Context:  For adults, paracetamol 500–1000 mg every 4–6 hours, max 4 g/day.
 
 Candidate answers, ranked by lens_focus (higher = better grounded answer):
-  0.87  Based on the guideline, an adult can take 500–1000 mg every 4–6 hours, max 4 g/day.
-  0.35  I'm not a doctor, so I can't say anything about doses.                 ← evasive
-  0.26  You should take 2000 mg every two hours until the fever is gone.       ← wrong dose
-  0.02  A fever can be uncomfortable. Make sure to rest and stay hydrated.     ← off-topic
+  0.88  Based on the guideline, an adult can take 500–1000 mg every 4–6 hours, max 4 g/day.
+  0.39  I'm not a doctor, so I can't say anything about doses.                 ← evasive
+  0.25  You should take 2000 mg every two hours until the fever is gone.       ← wrong dose
+  0.03  A fever can be uncomfortable. Make sure to rest and stay hydrated.     ← off-topic
 ```
 
 The grounded answer wins decisively and the off-topic one sinks. `lens_focus` was trained on
 RewardBench-2's *Focus* task and outranks many strong LLM-as-a-judge models on it — at a fraction of
 the cost. Full script: [`examples/rag_rerank.py`](examples/rag_rerank.py).
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/foudil09/lens-eval/main/assets/rewardbench2_focus.png"
+       width="600" alt="RewardBench-2 Focus: LENS vs. 16 LLM-as-a-judge models">
+  <br><sub>A ~0.6 B-parameter LENS metric outranks most LLM-as-a-judge models on RewardBench-2 · Focus — including ones orders of magnitude larger.</sub>
+</p>
 
 ## Install
 
@@ -100,6 +106,24 @@ Running on a GPU? `from lens_eval import configure; configure(device="cuda")` fi
 - **Bring your own features.** Pass `features=` (a NumPy array or DataFrame) to skip encoding —
   useful when your dimension scores already live in a CSV, or come from custom reference signals.
 - **Save, load, and share** locally or via the Hugging Face Hub.
+
+## Benchmarks
+
+**Machine translation (WMT MQM).** On the WMT MQM segment- and system-level pairwise-accuracy
+benchmarks, LENS reaches specialized-metric quality — matching COMET-22 and BLEURT-20 and
+approaching the 11–13 B-parameter xCOMET-XXL and MetricX — while *learning only ≤5 parameters*
+(the linear combiner) on top of frozen, off-the-shelf encoders.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/foudil09/lens-eval/main/assets/parameter_efficiency.png"
+       width="900" alt="WMT MQM pairwise accuracy vs. learned parameters: LENS reaches specialized-metric quality with ≤5 learned parameters">
+</p>
+
+**The cost is negligible.** The x-axis above counts *learned* parameters, where LENS uses ≤5.
+Its full inference footprint is ~0.6 B parameters — the four frozen, off-the-shelf encoders, with
+no task-specific fine-tuning — which is the same ballpark as COMET-22, roughly **20× smaller** than
+xCOMET-XXL / MetricX, and **~100× smaller** than the 70 B+ LLM judges it outranks on Focus. It runs
+on CPU, trains in seconds, and the learned part stays a handful of interpretable coefficients.
 
 ## Command line
 

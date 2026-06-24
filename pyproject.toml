@@ -36,7 +36,7 @@ encoders = [
     "sentence-transformers>=2.2",
 ]
 statsmodels = ["statsmodels>=0.14"]
-ebm = ["interpret>=0.5"]
+ebm = ["interpret-core>=0.5"]
 gbm = ["lightgbm>=4.0"]
 report = ["jinja2>=3.1"]
 cli = []
